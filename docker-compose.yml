@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres_banking
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1q2w3e
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - banking-network
+
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - banking-network
+
+  eurekaserver:
+    build: ./eurekaserver
+    container_name: eureka-server
+    ports:
+      - "8070:8070"
+    depends_on:
+      - zipkin
+    networks:
+      - banking-network
+
+  gatewayserver:
+    build: ./gatewayserver
+    container_name: gateway-server
+    ports:
+      - "8072:8072"
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+    depends_on:
+      - eurekaserver
+    networks:
+      - banking-network
+
+  gatewayserver-test:
+    build: ./gatewayserver
+    container_name: gateway-server-test
+    ports:
+      - "8073:8073"
+    environment:
+      - SPRING_PROFILES_ACTIVE=test
+      - GOOGLE_CLIENT_ID=dummy
+      - GOOGLE_CLIENT_SECRET=dummy
+    depends_on:
+      - eurekaserver
+    networks:
+      - banking-network
+
+  accountmanagement-1:
+    build: ./AccountManagement
+    container_name: account-service-1
+    ports:
+      - "8090:8090"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=1q2w3e
+    depends_on:
+      - postgres
+      - eurekaserver
+    networks:
+      - banking-network
+
+  accountmanagement-2:
+    build: ./AccountManagement
+    container_name: account-service-2
+    ports:
+      - "8091:8090"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=1q2w3e
+    depends_on:
+      - postgres
+      - eurekaserver
+    networks:
+      - banking-network
+
+  notification:
+    build: ./Notification
+    container_name: notification-service
+    ports:
+      - "8100:8100"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=1q2w3e
+    depends_on:
+      - postgres
+      - eurekaserver
+    networks:
+      - banking-network
+
+  transactions:
+    build: ./transactions
+    container_name: transaction-service
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=1q2w3e
+    depends_on:
+      - postgres
+      - eurekaserver
+    networks:
+      - banking-network
+
+volumes:
+  postgres_data:
+
+networks:
+  banking-network:
+    driver: bridge
